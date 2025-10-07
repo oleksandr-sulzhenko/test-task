@@ -1,0 +1,31 @@
+<div 
+  #scrollContainer
+  class="virtual-scroll-container"
+  (scroll)="onScroll($event)"
+  (keydown)="onKeyDown($event)"
+  tabindex="0"
+  [style.height.px]="containerHeight">
+
+  <div class="sticky-header">
+    <ng-content select="[header]"></ng-content>
+  </div>
+  
+  <div [style.height.px]="totalHeight" class="scroll-spacer">
+    <div 
+      class="items-container"
+      [style.transform]="'translateY(' + offsetY() + 'px)'">
+      <div 
+        *ngFor="let data of visibleItems(); trackBy: trackByFn"
+        class="virtual-item"
+        [class.virtual-item--focused]="data.isFocused"
+        #itemElement
+        [attr.data-index]="data.index"
+        (mousedown)="onItemMouseDown(data.index)"
+        (click)="itemClick.emit(data.item)">
+        <ng-container 
+          *ngTemplateOutlet="itemTemplate; context: { $implicit: data.item, index: data.index, focused: data.isFocused }">
+        </ng-container>
+      </div>
+    </div>
+  </div>
+</div>

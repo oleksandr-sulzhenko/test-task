@@ -1,0 +1,37 @@
+.sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;    
+  background: white;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.virtual-scroll-container {
+  overflow-y: auto;
+  overflow-x: hidden; 
+  position: relative;
+}
+
+.scroll-spacer {
+  position: relative;
+  width: 100%;
+}
+
+.items-container { 
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  will-change: transform;
+}
+
+.virtual-item {
+  position: relative;
+  transition: all 0.15s ease;
+  
+  &--focused {
+    background-color: #dadada;
+    outline-offset: -2px;
+    z-index: 1;
+  }
+}
