@@ -1,8 +1,9 @@
 import { 
   Component, Input, Output, EventEmitter, ChangeDetectionStrategy,
   OnInit, OnDestroy, ElementRef, ViewChild, signal, computed, TemplateRef, ContentChild,
-  ChangeDetectorRef
+  ChangeDetectorRef, PLATFORM_ID, inject
 } from '@angular/core';
+import { isPlatformBrowser } from '@angular/common';
 import { CommonModule } from '@angular/common';
 
 interface VirtualScrollItem {
@@ -24,6 +25,9 @@ interface ItemPosition {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class VirtualScrollerComponent<T extends VirtualScrollItem> implements OnInit, OnDestroy {
+  private platformId = inject(PLATFORM_ID);
+  private isBrowser = isPlatformBrowser(this.platformId);
+
   private itemsInput = signal<T[]>([]);
   items: T[] = [];
 
@@ -34,7 +38,7 @@ export class VirtualScrollerComponent<T extends VirtualScrollItem> implements On
     this.itemHeights.clear();
     this.initializePositions();
     
-    if (this.scrollContainer) {
+    if (this.isBrowser && this.scrollContainer) {
       this.scrollContainer.nativeElement.scrollTop = 0;
       this.scrollTop.set(0);
     }
@@ -67,7 +71,7 @@ export class VirtualScrollerComponent<T extends VirtualScrollItem> implements On
       return { start: 0, end: -1 };
     }
     
-    return this.getVisibleRangeDynamic(scroll);
+    return this.getVisibleRangeDynamic(this.isBrowser ? scroll : 0);
   });
 
   visibleItems = computed(() => {
@@ -79,6 +83,25 @@ export class VirtualScrollerComponent<T extends VirtualScrollItem> implements On
       return [];
     }
     
+    if (!this.isBrowser) {
+      let totalHeight = 0;
+      let count = 0;
+
+      for (let i = 0; i < itemsLength && totalHeight < this.containerHeight; i++) {
+        const estimatedHeight = this.estimateItemHeight(this.items[i]);
+        totalHeight += estimatedHeight;
+        count++;
+      }
+      
+      const initialCount = Math.min(count + 1, itemsLength);
+
+      return this.items.slice(0, initialCount).map((item, idx) => ({
+        item,
+        index: idx,
+        isFocused: false
+      }));
+    }
+    
     return this.items.slice(range.start, range.end + 1).map((item, idx) => ({
       item,
       index: range.start + idx,
@@ -87,6 +110,8 @@ export class VirtualScrollerComponent<T extends VirtualScrollItem> implements On
   });
 
   offsetY = computed(() => {
+    if (!this.isBrowser) return 0;
+    
     const range = this.visibleRange();
     if (this.itemPositions.length > 0) {
       return this.itemPositions[range.start]?.offset || 0;
@@ -106,20 +131,23 @@ export class VirtualScrollerComponent<T extends VirtualScrollItem> implements On
   constructor(private cdr: ChangeDetectorRef) {}
 
   ngOnInit(): void {
-    queueMicrotask(() => this.scrollContainer?.nativeElement.focus());
-    
-    this.setupFocusTracking();
-    this.setupResizeObserver();
+    if (this.isBrowser) {
+      queueMicrotask(() => this.scrollContainer?.nativeElement.focus());
+      this.setupFocusTracking();
+      this.setupResizeObserver();
+    }
   }
 
   ngOnDestroy(): void {
+    if (!this.isBrowser) return;
+    
     this.resizeObserver?.disconnect();
     
     if (this.rafId !== null) {
       cancelAnimationFrame(this.rafId);
     }
     
-    if (this.focusOutListener) {
+    if (this.focusOutListener && this.scrollContainer) {
       this.scrollContainer.nativeElement.removeEventListener('focusout', this.focusOutListener);
     }
   }
@@ -127,6 +155,8 @@ export class VirtualScrollerComponent<T extends VirtualScrollItem> implements On
   private lastScrollTop = 0;
 
   onScroll(event: Event): void {
+    if (!this.isBrowser) return;
+    
     const target = event.target as HTMLElement;
     this.lastScrollTop = target.scrollTop;
 
@@ -139,6 +169,8 @@ export class VirtualScrollerComponent<T extends VirtualScrollItem> implements On
   }
 
   onKeyDown(event: KeyboardEvent): void {
+    if (!this.isBrowser) return;
+    
     event.stopPropagation();
     
     let focused = this.focusedIndex();
@@ -172,11 +204,15 @@ export class VirtualScrollerComponent<T extends VirtualScrollItem> implements On
   }
 
   onItemMouseDown(index: number): void {
+    if (!this.isBrowser) return;
+    
     this.focusedIndex.set(index);
     this.cdr.markForCheck();
   }
 
   onContainerBlur(event: FocusEvent): void {
+    if (!this.isBrowser) return;
+    
     const relatedTarget = event.relatedTarget as HTMLElement;
     if (!relatedTarget || !this.scrollContainer.nativeElement.contains(relatedTarget)) {
       this.focusedIndex.set(-1);
@@ -269,6 +305,8 @@ export class VirtualScrollerComponent<T extends VirtualScrollItem> implements On
   }
 
   private scrollToFocused(): void {
+    if (!this.isBrowser) return;
+    
     const focused = this.focusedIndex();
     if (focused < 0 || !this.itemPositions[focused]) return;
 
@@ -317,7 +355,6 @@ export class VirtualScrollerComponent<T extends VirtualScrollItem> implements On
   private resizeRaf: number | null = null;
 
   private setupResizeObserver(): void {
-
     this.resizeObserver = new ResizeObserver((entries) => {
       if (this.resizeRaf) cancelAnimationFrame(this.resizeRaf);
       this.resizeRaf = requestAnimationFrame(() => {
